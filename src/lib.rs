@@ -378,15 +378,11 @@ mod tests {
 
   #[bench]
   fn simple_inserts(bencher: &mut test::Bencher) {
+    let mut tree: VoxelTree<i32> = VoxelTree::new();
+    tree.grow_to_hold(VoxelBounds::new(0, 0, 0, 30));
     bencher.iter(|| {
-      let mut tree: VoxelTree<i32> = VoxelTree::new();
-      tree.grow_to_hold(VoxelBounds::new(0, 0, 0, 30));
-
-      for i in -10..10 {
-        *tree.get_mut_or_create(VoxelBounds::new(i, i, i, 0)) = TreeBody::Leaf(0);
-      }
-
-      test::black_box(tree);
+      *tree.get_mut_or_create(VoxelBounds::new(0, 0, 0, 0)) = TreeBody::Leaf(0);
     });
+    test::black_box(tree);
   }
 }
