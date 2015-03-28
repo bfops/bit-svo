@@ -1,0 +1,10 @@
+[package]
+name = "bit-svo"
+version = "0.0.0"
+authors = [
+    "Ben Foppa <benjamin.foppa@gmail.com>",
+  ]
+
+[lib]
+name = "bit_svo"
+path = "src/lib.rs"
