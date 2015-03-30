@@ -1,8 +1,10 @@
+#![feature(core)]
 #![feature(test)]
 
 use std::mem;
 use std::ops::Deref;
 
+mod raycast;
 mod voxel_bounds;
 
 pub use voxel_bounds::VoxelBounds;
@@ -339,6 +341,41 @@ impl<T> VoxelTree<T> {
       _ => None,
     }
   }
+
+  pub fn cast_ray<'a>(
+    &'a self,
+    origin: [f32; 3],
+    direction: [f32; 3],
+  ) -> Option<(VoxelBounds, &'a T)> {
+    let coords = [
+      if origin[0] >= 0.0 {1} else {0},
+      if origin[1] >= 0.0 {1} else {0},
+      if origin[2] >= 0.0 {1} else {0},
+    ];
+    // NB: The children are half the size of the tree itself,
+    // but tree.lg_size=0 means it extends tree.lg_size=0 in *each direction*,
+    // so the "actual" size of the tree as a voxel would be tree.lg_size+1.
+    let child_lg_size = self.lg_size as i16;
+    let mut make_bounds = |coords: [usize; 3]| {
+      VoxelBounds {
+        x: coords[0] as i32 - 1,
+        y: coords[1] as i32 - 1,
+        z: coords[2] as i32 - 1,
+        lg_size: child_lg_size,
+      }
+    };
+    match raycast::cast_ray_branches(
+      &self.contents,
+      origin,
+      direction,
+      None,
+      coords,
+      &mut make_bounds,
+    ) {
+      Ok(r) => Some(r),
+      Err(_) => None,
+    }
+  }
 }
 
 #[cfg(test)]
@@ -382,6 +419,20 @@ mod tests {
     assert_eq!(tree.get(VoxelBounds::new(1, 1, 1, 0)), Some(&1));
   }
 
+  #[test]
+  fn simple_cast_ray() {
+    let mut tree: VoxelTree<i32> = VoxelTree::new();
+    *tree.get_mut_or_create(VoxelBounds::new(1, 1, 1, 0)) = TreeBody::Leaf(1);
+    *tree.get_mut_or_create(VoxelBounds::new(4, 4, 4, 0)) = TreeBody::Leaf(2);
+
+    let actual = tree.cast_ray(
+      [4.5, 3.0, 4.5],
+      [0.1, 0.8, 0.1],
+    );
+
+    assert_eq!(actual, Some((VoxelBounds::new(4, 4, 4, 0), &2)));
+  }
+
   #[bench]
   fn simple_inserts(bencher: &mut test::Bencher) {
     let mut tree: VoxelTree<i32> = VoxelTree::new();
@@ -390,5 +441,21 @@ mod tests {
       *tree.get_mut_or_create(VoxelBounds::new(0, 0, 0, 0)) = TreeBody::Leaf(0);
     });
     test::black_box(tree);
+  }
+
+  #[bench]
+  fn bench_cast_ray(bencher: &mut test::Bencher) {
+    let mut tree: VoxelTree<i32> = VoxelTree::new();
+    tree.grow_to_hold(VoxelBounds::new(0, 0, 0, 30));
+    *tree.get_mut_or_create(VoxelBounds::new(1, 1, 1, 0)) = TreeBody::Leaf(1);
+    *tree.get_mut_or_create(VoxelBounds::new(4, 4, 4, 0)) = TreeBody::Leaf(2);
+
+    bencher.iter(|| {
+      let r = tree.cast_ray(
+        [4.5, 3.0, 4.5],
+        [0.1, 0.8, 0.1],
+      );
+      test::black_box(r);
+    });
   }
 }

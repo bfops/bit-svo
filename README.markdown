@@ -12,5 +12,4 @@ Things to note:
   * The tree width is an exponent of 2 (the same in all dimensions).
   * The tree is always centered around (0, 0, 0).
   * The tree expands dynamically on insert.
-  * The traversal functions are non-recursive.
   * The benches run at around `1us`/insert through 30 levels of depth (world width of `2^30` voxels).
