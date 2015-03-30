@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 mod voxel_bounds;
 
-pub use voxel_bounds::*;
+pub use voxel_bounds::VoxelBounds;
 
 #[derive(Debug)]
 pub struct VoxelTree<T> {
@@ -16,7 +16,7 @@ pub struct VoxelTree<T> {
   contents: Branches<T>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Branches<T> {
   // xyz ordering
@@ -29,6 +29,14 @@ pub struct Branches<T> {
   hlh: TreeBody<T>,
   hhl: TreeBody<T>,
   hhh: TreeBody<T>,
+}
+
+/// The main, recursive, tree-y part of the `VoxelTree`.
+#[derive(Debug, PartialEq, Eq)]
+pub enum TreeBody<T> {
+  Empty,
+  Leaf(T),
+  Branch(Box<Branches<T>>),
 }
 
 impl<T> Branches<T> {
@@ -44,14 +52,13 @@ impl<T> Branches<T> {
       hhh: TreeBody::Empty,
     }
   }
-}
 
-/// The main, recursive, tree-y part of the `VoxelTree`.
-#[derive(Debug)]
-pub enum TreeBody<T> {
-  Empty,
-  Leaf(T),
-  Branch(Box<Branches<T>>),
+  pub fn get<'a>(&'a self, x: usize, y: usize, z: usize) -> &'a TreeBody<T> {
+    let this: &'a [[[TreeBody<T>; 2]; 2]; 2] = unsafe {
+      mem::transmute(self)
+    };
+    &this[x][y][z]
+  }
 }
 
 impl<T> VoxelTree<T> {
@@ -72,8 +79,7 @@ impl<T> VoxelTree<T> {
     let high = (1 << self.lg_size) >> voxel.lg_size;
     let low = -high;
 
-    // TODO: Should these be strict?
-    if voxel.x <= low || voxel.y <= low || voxel.z <= low {
+    if voxel.x < low || voxel.y < low || voxel.z < low {
       return false
     }
 
@@ -342,7 +348,7 @@ mod tests {
   use super::{VoxelBounds, VoxelTree, TreeBody};
 
   #[test]
-  fn simple_test() {
+  fn insert_and_lookup() {
     let mut tree: VoxelTree<i32> = VoxelTree::new();
     *tree.get_mut_or_create(VoxelBounds::new(1, 1, 1, 0)) = TreeBody::Leaf(1);
     *tree.get_mut_or_create(VoxelBounds::new(8, -8, 4, 0)) = TreeBody::Leaf(2);
