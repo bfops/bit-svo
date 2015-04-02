@@ -49,21 +49,25 @@ pub struct Exit {
 
 // TODO: Audit all the divisions for divide-by-zeros.
 
-pub fn cast_ray_branches<'a, T, MakeBounds>(
+#[inline]
+pub fn cast_ray_branches<'a, T, MakeBounds, Act, R>(
   this: &'a Branches<T>,
   origin: [f32; 3],
   direction: [f32; 3],
   mut entry: Option<Entry>,
   mut coords: [usize; 3],
   make_bounds: &mut MakeBounds,
-) -> Result<(VoxelBounds, &'a T), Exit>
-  where MakeBounds: FnMut([usize; 3]) -> VoxelBounds,
+  act: &mut Act,
+) -> Result<R, Exit>
+  where
+    MakeBounds: FnMut([usize; 3]) -> VoxelBounds,
+    Act: FnMut(VoxelBounds, &'a T) -> Option<R>,
 {
   loop {
     let child = this.get(coords[0], coords[1], coords[2]);
     let bounds = make_bounds(coords);
 
-    match cast_ray(child, origin, direction, bounds, entry) {
+    match cast_ray(child, origin, direction, bounds, entry, act) {
       Ok(r) => return Ok(r),
       Err(exit) => {
         let dim = exit.side % 3;
@@ -85,59 +89,28 @@ pub fn cast_ray_branches<'a, T, MakeBounds>(
 }
 
 /// Precondition: the ray passes through `this`.
-pub fn cast_ray<'a, T>(
+pub fn cast_ray<'a, T, Act, R>(
   this: &'a TreeBody<T>,
   origin: [f32; 3],
   direction: [f32; 3],
   bounds: VoxelBounds,
   entry: Option<Entry>,
-) -> Result<(VoxelBounds, &'a T), Exit> {
+  act: &mut Act,
+) -> Result<R, Exit>
+  where
+    Act: FnMut(VoxelBounds, &'a T) -> Option<R>
+{
   match this {
     &TreeBody::Empty => {
-      let sides = [
-        bounds.x,
-        bounds.y,
-        bounds.z,
-        bounds.x + 1,
-        bounds.y + 1,
-        bounds.z + 1,
-      ];
-
-      let next_toi = |(side, &bound): (usize, &i32)| {
-        let dim = side % 3;
-        let bound = bound as f32 * bounds.size();
-        if direction[dim] == 0.0 {
-          None
-        } else {
-          let toi = (bound - origin[dim]) / direction[dim];
-          if entry.map(|entry| entry.toi.0 <= toi).unwrap_or(toi >= 0.0) {
-            Some(Exit {
-              side: side,
-              toi: TOI(toi),
-            })
-          } else {
-            None
-          }
-        }
-      };
-
-      let exit =
-        match entry {
-          None =>
-            sides.iter()
-            .enumerate()
-            .filter_map(next_toi)
-            .min_by(|&exit| exit.toi).unwrap(),
-          Some(entry) =>
-            sides.iter()
-            .enumerate()
-            .filter(|&(i, _)| i != entry.side)
-            .filter_map(next_toi)
-            .min_by(|&exit| exit.toi).unwrap(),
-        };
-      Err(exit)
+      // We pass through empty voxels; fall through.
     },
-    &TreeBody::Leaf(ref leaf) => Ok((bounds, leaf)),
+    &TreeBody::Leaf(ref leaf) => {
+      if let Some(r) = act(bounds, leaf) {
+        return Ok(r)
+      }
+
+      // No return value for this voxel; fall through.
+    },
     &TreeBody::Branch(ref b) => {
       let mid = [
         (bounds.x as f32 + 0.5) * bounds.size(),
@@ -163,19 +136,66 @@ pub fn cast_ray<'a, T>(
         origin[1] + entry_toi*direction[1],
         origin[2] + entry_toi*direction[2],
       ];
+      let coords = [
+        if intersect[0] >= mid[0] {1} else {0},
+        if intersect[1] >= mid[1] {1} else {0},
+        if intersect[2] >= mid[2] {1} else {0},
+      ];
 
-      cast_ray_branches(
+      return cast_ray_branches(
         b,
         origin,
         direction,
         entry,
-        [
-          if intersect[0] >= mid[0] {1} else {0},
-          if intersect[1] >= mid[1] {1} else {0},
-          if intersect[2] >= mid[2] {1} else {0},
-        ],
+        coords,
         &mut make_bounds,
+        act,
       )
     }
-  }
+  };
+
+  // We pass through this voxel; calculate the exit.
+
+  let sides = [
+    bounds.x,
+    bounds.y,
+    bounds.z,
+    bounds.x + 1,
+    bounds.y + 1,
+    bounds.z + 1,
+  ];
+
+  let next_toi = |(side, &bound): (usize, &i32)| {
+    let dim = side % 3;
+    let bound = bound as f32 * bounds.size();
+    if direction[dim] == 0.0 {
+      None
+    } else {
+      let toi = (bound - origin[dim]) / direction[dim];
+      if entry.map(|entry| entry.toi.0 <= toi).unwrap_or(toi >= 0.0) {
+        Some(Exit {
+          side: side,
+          toi: TOI(toi),
+        })
+      } else {
+        None
+      }
+    }
+  };
+
+  let exit =
+    match entry {
+      None =>
+        sides.iter()
+        .enumerate()
+        .filter_map(next_toi)
+        .min_by(|&exit| exit.toi).unwrap(),
+      Some(entry) =>
+        sides.iter()
+        .enumerate()
+        .filter(|&(i, _)| i != entry.side)
+        .filter_map(next_toi)
+        .min_by(|&exit| exit.toi).unwrap(),
+    };
+  Err(exit)
 }

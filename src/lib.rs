@@ -342,11 +342,15 @@ impl<T> VoxelTree<T> {
     }
   }
 
-  pub fn cast_ray<'a>(
+  pub fn cast_ray<'a, Act, R>(
     &'a self,
     origin: [f32; 3],
     direction: [f32; 3],
-  ) -> Option<(VoxelBounds, &'a T)> {
+    act: &mut Act,
+  ) -> Option<R>
+    where
+      Act: FnMut(VoxelBounds, &'a T) -> Option<R>
+  {
     let coords = [
       if origin[0] >= 0.0 {1} else {0},
       if origin[1] >= 0.0 {1} else {0},
@@ -371,6 +375,7 @@ impl<T> VoxelTree<T> {
       None,
       coords,
       &mut make_bounds,
+      act,
     ) {
       Ok(r) => Some(r),
       Err(_) => None,
@@ -428,6 +433,8 @@ mod tests {
     let actual = tree.cast_ray(
       [4.5, 3.0, 4.5],
       [0.1, 0.8, 0.1],
+      // Return the first voxel we hit.
+      &mut |bounds, v| Some((bounds, v)),
     );
 
     assert_eq!(actual, Some((VoxelBounds::new(4, 4, 4, 0), &2)));
@@ -454,6 +461,8 @@ mod tests {
       let r = tree.cast_ray(
         [4.5, 3.0, 4.5],
         [0.1, 0.8, 0.1],
+        // Return the first voxel we hit.
+        &mut |bounds, v| Some((bounds, v)),
       );
       test::black_box(r);
     });
