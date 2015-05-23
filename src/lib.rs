@@ -1,5 +1,5 @@
 #![feature(core)]
-#![feature(test)]
+#![cfg_attr(test, feature(test))]
 
 use std::mem;
 use std::ops::Deref;

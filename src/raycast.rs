@@ -4,7 +4,7 @@ use super::{TreeBody, Branches, VoxelBounds};
 
 // Time-of-intersection. Implements `Ord` for sanity reasons;
 // let's hope the floating-points are all valid.
-#[derive(Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 struct TOI(pub f32);
 
 impl Eq for TOI {}
@@ -15,7 +15,7 @@ impl Ord for TOI {
   }
 }
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Copy, Clone)]
 /// Information about a ray entering a voxel.
 pub struct Entry {
   /// Index of a side of a rectangular-prismic voxel.
@@ -38,7 +38,7 @@ impl Entry {
   }
 }
  
-#[derive(Debug, Copy)]
+#[derive(Debug, Copy, Clone)]
 /// Information about a ray exit a voxel.
 pub struct Exit {
   /// Index of a side of a rectangular-prismic voxel.
