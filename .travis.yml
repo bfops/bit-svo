@@ -1,5 +1,10 @@
 language: rust
 
+before_install:
+  - wget https://static.rust-lang.org/rustup.sh
+  - chmod +x rustup.sh
+  - ./rustup.sh --channel=nightly --disable-sudo
+
 script:
   - cargo build --verbose
   - cargo test --verbose
